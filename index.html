@@ -43,6 +43,23 @@
     }
     button:active{transform:translateY(1px)}
     button.active{border-color:var(--accent); color:var(--accent)}
+    .info-btn{padding:10px; min-width:40px; font-size:15px; font-weight:700; line-height:1}
+    .overlay{
+      position:fixed; inset:0; z-index:100;
+      background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;
+      padding:20px;
+    }
+    .overlay-box{
+      background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+      padding:20px; max-width:340px; width:100%; font-size:14px; line-height:1.5;
+    }
+    .overlay-box h2{margin:0 0 10px; font-size:16px}
+    .overlay-box p{margin:0 0 12px; color:var(--muted)}
+    .overlay-box strong{color:var(--text)}
+    .overlay-box .close-btn{
+      width:100%; margin-top:4px; padding:12px; border-radius:12px;
+      font-size:14px; font-weight:600;
+    }
     .pill{
       display:flex; align-items:center; gap:8px;
       border:1px solid var(--border);
@@ -127,6 +144,7 @@
       <div class="sub" id="subtitle">Standort abrufen…</div>
     </div>
     <div class="btns">
+      <button id="btnInfo" class="info-btn" title="Info">ⓘ</button>
       <button id="btnRefresh" title="Aktualisieren">↻</button>
       <button id="btnStop" title="Haltestelle wählen">Haltestelle</button>
       <button id="btnRadius" title="Radius ändern">Radius</button>
@@ -628,6 +646,21 @@
       if (viewMode === "departures") loadDepartures();
     }
   }
+
+  document.getElementById("btnInfo").addEventListener("click", () => {
+    const ov = document.createElement("div");
+    ov.className = "overlay";
+    ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
+    ov.innerHTML = `<div class="overlay-box">
+      <h2>BVG Express</h2>
+      <p>Ziel dieser Anwendung ist, auf dem schnellsten Weg die relevanten Abfahrten zu finden.</p>
+      <p><strong>Als App speichern:</strong></p>
+      <p><strong>iPhone:</strong> Im Safari auf <em>Teilen</em> (⬆) tippen → <em>Zum Home-Bildschirm</em> wählen.</p>
+      <p><strong>Android:</strong> Im Chrome auf <em>Menü</em> (⋮) tippen → <em>Zum Startbildschirm hinzufügen</em> wählen.</p>
+      <button class="close-btn" onclick="this.closest('.overlay').remove()">Schließen</button>
+    </div>`;
+    document.body.appendChild(ov);
+  });
 
   document.getElementById("btnRefresh").addEventListener("click", loadDepartures);
   btnStop.addEventListener("click", showStopPicker);
