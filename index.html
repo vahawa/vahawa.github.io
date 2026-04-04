@@ -60,6 +60,12 @@
       width:100%; margin-top:4px; padding:12px; border-radius:12px;
       font-size:14px; font-weight:600;
     }
+    .choice-grid{display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px}
+    .choice-grid button{
+      flex:1 1 auto; min-width:60px; padding:12px 10px; border-radius:12px;
+      font-size:15px; font-weight:600; text-align:center;
+    }
+    .choice-grid button.selected{border-color:var(--accent); color:var(--accent)}
     .pill{
       display:flex; align-items:center; gap:8px;
       border:1px solid var(--border);
@@ -147,8 +153,8 @@
       <button id="btnInfo" class="info-btn" title="Info">ⓘ</button>
       <button id="btnRefresh" title="Aktualisieren">↻</button>
       <button id="btnStop" title="Haltestelle wählen">Haltestelle</button>
-      <button id="btnRadius" title="Radius ändern">Radius</button>
-      <button id="btnCount" title="Anzahl Abfahrten ändern">Abfahrten</button>
+      <button id="btnRadius" title="Radius ändern"></button>
+      <button id="btnCount" title="Anzahl Abfahrten ändern"></button>
     </div>
   </header>
 
@@ -214,6 +220,14 @@
     if (viewMode === "departures") {
       refreshTimer = setTimeout(loadDepartures, AUTO_REFRESH_MS);
     }
+  }
+
+  const btnRadius = document.getElementById("btnRadius");
+  const btnCount = document.getElementById("btnCount");
+
+  function updateSettingsButtons() {
+    btnRadius.textContent = `${state.radius_m} m`;
+    btnCount.textContent = `${state.max_results} Abf.`;
   }
 
   function updateStopButton() {
@@ -627,24 +641,50 @@
     renderStops(cachedStops);
   }
 
+  function showChoiceOverlay(title, options, currentValue, unit, onSelect){
+    const ov = document.createElement("div");
+    ov.className = "overlay";
+    ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
+    const box = document.createElement("div");
+    box.className = "overlay-box";
+    const h = document.createElement("h2");
+    h.textContent = title;
+    box.appendChild(h);
+    const grid = document.createElement("div");
+    grid.className = "choice-grid";
+    for(const val of options){
+      const btn = document.createElement("button");
+      btn.textContent = unit ? `${val} ${unit}` : String(val);
+      if(val === currentValue) btn.classList.add("selected");
+      btn.addEventListener("click", () => { ov.remove(); onSelect(val); });
+      grid.appendChild(btn);
+    }
+    box.appendChild(grid);
+    const close = document.createElement("button");
+    close.className = "close-btn";
+    close.textContent = "Abbrechen";
+    close.addEventListener("click", () => ov.remove());
+    box.appendChild(close);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+  }
+
   function changeRadius(){
-    const r = prompt("Radius in Metern (50–2000):", String(state.radius_m));
-    if(r != null){
-      const v = Math.max(50, Math.min(2000, parseInt(r,10) || state.radius_m));
+    showChoiceOverlay("Radius", [100, 200, 500, 1000, 2000], state.radius_m, "m", (v) => {
       state.radius_m = v;
       saveSettings();
+      updateSettingsButtons();
       loadDepartures();
-    }
+    });
   }
 
   function changeCount(){
-    const m = prompt("Max. Abfahrten anzeigen (1–20):", String(state.max_results));
-    if(m != null){
-      const v = Math.max(1, Math.min(20, parseInt(m,10) || state.max_results));
+    showChoiceOverlay("Abfahrten", [5, 10, 20], state.max_results, "", (v) => {
       state.max_results = v;
       saveSettings();
+      updateSettingsButtons();
       if (viewMode === "departures") loadDepartures();
-    }
+    });
   }
 
   document.getElementById("btnInfo").addEventListener("click", () => {
@@ -668,6 +708,7 @@
   document.getElementById("btnCount").addEventListener("click", changeCount);
 
   updateStopButton();
+  updateSettingsButtons();
   loadDepartures();
 })();
 
