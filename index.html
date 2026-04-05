@@ -108,6 +108,7 @@
       cursor:pointer;
       -webkit-tap-highlight-color:transparent;
       transition:border-color .15s;
+      width:100%; text-align:left; font:inherit; color:inherit;
     }
     .stop-card:active{border-color:var(--accent)}
     .stop-name{font-size:15px; font-weight:600}
@@ -188,7 +189,7 @@
     dep_duration_min: 90,
     lang: "de",
     loc_timeout_ms: 10000,
-    req_timeout_ms: 7000,
+    req_timeout_ms: 10000,
   };
 
   const state = { ...defaults, ...loadSettings() };
@@ -196,6 +197,7 @@
   let cachedStops = [];
   let filterStop = null;
   let viewMode = "departures"; // "departures" | "stops"
+  let loadRequestId = 0;
 
   function loadSettings() {
     try {
@@ -465,7 +467,7 @@
     }
 
     // "Alle" option to clear filter
-    const allCard = document.createElement("div");
+    const allCard = document.createElement("button");
     allCard.className = "stop-card";
     if (!filterStop) allCard.style.borderColor = "var(--accent)";
     allCard.addEventListener("click", () => {
@@ -480,14 +482,14 @@
     allName.style.color = filterStop ? "var(--text)" : "var(--accent)";
     const allDist = document.createElement("div");
     allDist.className = "stop-dist";
-    allDist.textContent = `${stops.length} Stops`;
+    allDist.textContent = `${stops.length} Haltestellen`;
     allLeft.appendChild(allName);
     allLeft.appendChild(allDist);
     allCard.appendChild(allLeft);
     listEl.appendChild(allCard);
 
     for(const s of stops){
-      const card = document.createElement("div");
+      const card = document.createElement("button");
       card.className = "stop-card";
       if (filterStop && filterStop.id === s.id) card.style.borderColor = "var(--accent)";
       card.addEventListener("click", () => {
@@ -534,6 +536,7 @@
 
   async function loadDepartures(){
     clearTimeout(refreshTimer);
+    const thisRequest = ++loadRequestId;
     viewMode = "departures";
     clearList();
 
@@ -543,10 +546,11 @@
       subtitle.textContent = "GPS + BVG API";
 
       const loc = await getLocation();
+      if (thisRequest !== loadRequestId) return;
       subtitle.textContent = `📍 ${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)} (±${Math.round(loc.acc)} m)`;
 
       // fetch nearby stops (needed for unfiltered view + to update cache)
-      const nearbyPayload = await fetchJSON(`${API_BASE}/locations/nearby`, {
+      const nearbyParams = {
         latitude: loc.lat,
         longitude: loc.lon,
         distance: state.radius_m,
@@ -554,8 +558,20 @@
         stops: "true",
         poi: "false",
         pretty: "false",
-      });
+      };
+      let nearbyPayload;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          nearbyPayload = await fetchJSON(`${API_BASE}/locations/nearby`, nearbyParams);
+          break;
+        } catch(e) {
+          if (attempt >= 2) throw e;
+          if (thisRequest !== loadRequestId) return;
+          statusEl.textContent = `Erneuter Versuch (${attempt + 1}/2)…`;
+        }
+      }
 
+      if (thisRequest !== loadRequestId) return;
       const nearby = parseNearbyStops(nearbyPayload);
       cachedStops = nearby;
 
@@ -579,6 +595,7 @@
       const when = nowISO();
       const nowMillis = Date.now();
 
+      let depErrors = 0;
       const perStop = await Promise.all(
         stopsToQuery.map(async (stop) => {
           try{
@@ -594,10 +611,21 @@
             });
             return parseDepartures(dep, stop, nowMillis);
           } catch {
+            depErrors++;
             return [];
           }
         })
       );
+
+      if (thisRequest !== loadRequestId) return;
+
+      if (depErrors === stopsToQuery.length) {
+        setPill("err", "Fehler");
+        statusEl.textContent = "Abfahrten konnten nicht geladen werden.";
+        clearList();
+        scheduleRefresh();
+        return;
+      }
 
       const combined = perStop.flat();
       const rows = dedupSort(combined, state.max_results);
@@ -616,11 +644,12 @@
       renderDepartures(rows, !filterStop);
 
     } catch(e){
+      if (thisRequest !== loadRequestId) return;
       setPill("err", "Fehler");
       statusEl.textContent = `Fehler: ${e?.message || e}`;
-      renderDepartures([], false);
+      clearList();
     } finally {
-      scheduleRefresh();
+      if (thisRequest === loadRequestId) scheduleRefresh();
     }
   }
 
@@ -636,6 +665,7 @@
       return;
     }
     clearTimeout(refreshTimer);
+    ++loadRequestId; // invalidate any in-flight loadDepartures()
     setPill("ok", "Aktuell");
     statusEl.textContent = "Haltestelle auswählen:";
     renderStops(cachedStops);
