@@ -55,6 +55,7 @@
     }
     .overlay-box h2{margin:0 0 10px; font-size:16px}
     .overlay-box p{margin:0 0 12px; color:var(--muted)}
+    .overlay-box a{color:var(--accent)}
     .overlay-box strong{color:var(--text)}
     .overlay-box .close-btn{
       width:100%; margin-top:4px; padding:12px; border-radius:12px;
@@ -169,7 +170,7 @@
 
 <script>
 (() => {
-  const API_BASE = "https://v6.bvg.transport.rest";
+  const API_BASE = "https://api.transitous.org/api/v1";
   const TZ = "Europe/Berlin";
   const STORAGE_KEY = "bvg_settings";
   const AUTO_REFRESH_MS = 30_000;
@@ -187,7 +188,6 @@
     nearby_limit: 18,
     dep_results_per_stop: 10,
     dep_duration_min: 90,
-    lang: "de",
     loc_timeout_ms: 10000,
     req_timeout_ms: 10000,
   };
@@ -291,61 +291,64 @@
     }
   }
 
-  function parseNearbyStops(payload){
-    const items = Array.isArray(payload)
-      ? payload
-      : (payload?.nearby || payload?.results || payload?.locations || []);
-    const out = [];
-    for(const it of (items || [])){
+  function distanceM(lat1, lon1, lat2, lon2){
+    const R = 6371000, toRad = (x) => x * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  // map/stops liefert Bahnsteig-Ebene; auf VBB-Stationen gruppieren (key = Stations-Teil
+  // der ID), DELFI-Duplikate verwerfen. Als Query-ID dient die echte Bahnsteig-ID des
+  // nächstgelegenen Eintrags — die abgeleitete Stations-ID existiert nicht immer als Stop.
+  function parseNearbyStops(payload, loc){
+    const items = Array.isArray(payload) ? payload : [];
+    const byStation = new Map();
+    for(const it of items){
       if(!it || typeof it !== "object") continue;
-      if(it.type !== "stop") continue;
-      if(!it.id || !it.name) continue;
-      const dist = Math.round(Number(it.distance ?? 999999));
-      out.push({ id: String(it.id), name: String(it.name), distance: isFinite(dist) ? dist : 999999 });
+      const m = String(it.stopId || "").match(/^(de-VBB_de:\d+:\d+)/);
+      if(!m || !it.name) continue;
+      const dist = Math.round(distanceM(loc.lat, loc.lon, Number(it.lat), Number(it.lon)));
+      if(!isFinite(dist) || dist > state.radius_m) continue;
+      const prev = byStation.get(m[1]);
+      if(!prev || dist < prev.distance){
+        byStation.set(m[1], { id: String(it.stopId), key: m[1], name: String(it.name), distance: dist });
+      }
     }
+    const out = [...byStation.values()];
     out.sort((a,b) => a.distance - b.distance);
-    return out;
+    return out.slice(0, state.nearby_limit);
   }
 
-  function computeActualTime(planned, when, delayS) {
-    if (when) return new Date(when);
-    if (!planned) return null;
-    const base = new Date(planned);
-    if (Number.isNaN(base.getTime())) return null;
-    if (delayS != null && isFinite(Number(delayS))) {
-      return new Date(base.getTime() + Number(delayS) * 1000);
-    }
-    return base;
-  }
-
-  function parseDepartures(payload, stop, nowMillis){
-    const deps = Array.isArray(payload)
-      ? payload
-      : (payload?.departures || payload?.results || []);
+  // onlyThisStop: stoptimes expandiert auf die ganze Station (teils Nachbar-Stops im
+  // selben Cluster) — im Haltestellenfilter-Modus auf die gewählte Station einschränken
+  function parseDepartures(payload, stop, nowMillis, onlyThisStop){
+    const deps = payload?.stopTimes || [];
+    const horizon = nowMillis + state.dep_duration_min * 60_000;
     const rows = [];
     for(const d of (deps || [])){
-      if(!d || typeof d !== "object") continue;
+      if(!d || typeof d !== "object" || !d.place) continue;
+      const p = d.place;
+      if(onlyThisStop && stop.key && !String(p.stopId || "").startsWith(stop.key)) continue;
 
-      const dt = computeActualTime(d.plannedWhen, d.when, d.delay);
-      if (!dt || Number.isNaN(dt.getTime())) continue;
-      if (dt.getTime() < nowMillis) continue;
+      const dt = new Date(p.departure || p.scheduledDeparture || NaN);
+      if (Number.isNaN(dt.getTime())) continue;
+      if (dt.getTime() < nowMillis || dt.getTime() > horizon) continue;
 
-      const delayS = d.delay;
-      const delayMin = (delayS == null) ? null : Math.round(Number(delayS)/60);
-      const delayTxt = (delayMin == null) ? "pünktlich" : (delayMin > 0 ? `+${delayMin}` : (delayMin === 0 ? "pünktlich" : `${delayMin}`));
-
-      const lineObj = d.line;
-      const route = (lineObj && typeof lineObj === "object")
-        ? (lineObj.name || lineObj.id || "")
-        : (lineObj || "");
+      let delayMin = null;
+      if (d.realTime && p.scheduledDeparture) {
+        const sched = new Date(p.scheduledDeparture);
+        if (!Number.isNaN(sched.getTime())) delayMin = Math.round((dt.getTime() - sched.getTime())/60000);
+      }
+      const delayTxt = (delayMin == null || delayMin === 0) ? "pünktlich" : (delayMin > 0 ? `+${delayMin}` : `${delayMin}`);
 
       rows.push({
         when_dt: dt,
         time: isoToLocalTime(dt.toISOString()),
         delay: delayTxt,
-        route: String(route),
-        headsign: String(d.direction || ""),
-        platform: String(d.platform || d.plannedPlatform || ""),
+        route: String(d.routeShortName || d.displayName || ""),
+        headsign: String(d.headsign || ""),
+        platform: String(p.track || p.scheduledTrack || ""),
         stop_id: stop.id,
         stop_name: stop.name,
         distance_m: stop.distance,
@@ -491,7 +494,7 @@
     for(const s of stops){
       const card = document.createElement("button");
       card.className = "stop-card";
-      if (filterStop && filterStop.id === s.id) card.style.borderColor = "var(--accent)";
+      if (filterStop && filterStop.key === s.key) card.style.borderColor = "var(--accent)";
       card.addEventListener("click", () => {
         filterStop = s;
         updateStopButton();
@@ -502,7 +505,7 @@
       const name = document.createElement("div");
       name.className = "stop-name";
       name.textContent = s.name;
-      if (filterStop && filterStop.id === s.id) name.style.color = "var(--accent)";
+      if (filterStop && filterStop.key === s.key) name.style.color = "var(--accent)";
       const dist = document.createElement("div");
       dist.className = "stop-dist";
       dist.textContent = fmtDistance(s.distance);
@@ -543,26 +546,24 @@
     try{
       setPill("", "Lade…");
       statusEl.textContent = "Standort wird abgerufen…";
-      subtitle.textContent = "GPS + BVG API";
+      subtitle.textContent = "GPS + Transitous";
 
       const loc = await getLocation();
       if (thisRequest !== loadRequestId) return;
       subtitle.textContent = `📍 ${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)} (±${Math.round(loc.acc)} m)`;
 
-      // fetch nearby stops (needed for unfiltered view + to update cache)
+      // fetch nearby stops (needed for unfiltered view + to update cache);
+      // Radius als Bounding-Box, exakter Radius wird in parseNearbyStops gefiltert
+      const dLat = state.radius_m / 111320;
+      const dLon = state.radius_m / (111320 * Math.cos(loc.lat * Math.PI / 180));
       const nearbyParams = {
-        latitude: loc.lat,
-        longitude: loc.lon,
-        distance: state.radius_m,
-        results: state.nearby_limit,
-        stops: "true",
-        poi: "false",
-        pretty: "false",
+        min: `${(loc.lat - dLat).toFixed(6)},${(loc.lon - dLon).toFixed(6)}`,
+        max: `${(loc.lat + dLat).toFixed(6)},${(loc.lon + dLon).toFixed(6)}`,
       };
       let nearbyPayload;
       for (let attempt = 0; ; attempt++) {
         try {
-          nearbyPayload = await fetchJSON(`${API_BASE}/locations/nearby`, nearbyParams);
+          nearbyPayload = await fetchJSON(`${API_BASE}/map/stops`, nearbyParams);
           break;
         } catch(e) {
           if (attempt >= 2) throw e;
@@ -572,11 +573,11 @@
       }
 
       if (thisRequest !== loadRequestId) return;
-      const nearby = parseNearbyStops(nearbyPayload);
+      const nearby = parseNearbyStops(nearbyPayload, loc);
       cachedStops = nearby;
 
       const stopsToQuery = filterStop
-        ? nearby.filter(s => s.id === filterStop.id)
+        ? nearby.filter(s => s.key === filterStop.key)
         : nearby;
 
       if(!stopsToQuery.length){
@@ -599,17 +600,16 @@
       const perStop = await Promise.all(
         stopsToQuery.map(async (stop) => {
           try{
-            const dep = await fetchJSON(`${API_BASE}/stops/${encodeURIComponent(stop.id)}/departures`, {
-              when,
-              results: filterStop
-                ? Math.max(state.max_results, state.dep_results_per_stop)
+            const dep = await fetchJSON(`${API_BASE}/stoptimes`, {
+              stopId: stop.id,
+              time: when,
+              // im Filter-Modus mehr holen: die Antwort enthält auch Nachbar-Stops
+              // des Clusters, die anschließend rausgefiltert werden
+              n: filterStop
+                ? Math.max(state.max_results, state.dep_results_per_stop) * 3
                 : state.dep_results_per_stop,
-              duration: state.dep_duration_min,
-              remarks: "false",
-              language: state.lang,
-              pretty: "false",
             });
-            return parseDepartures(dep, stop, nowMillis);
+            return parseDepartures(dep, stop, nowMillis, Boolean(filterStop));
           } catch {
             depErrors++;
             return [];
@@ -727,7 +727,8 @@
       <p><strong>Als App speichern:</strong></p>
       <p><strong>iPhone:</strong> Im Safari auf <em>Teilen</em> (⬆) tippen → <em>Zum Home-Bildschirm</em> wählen.</p>
       <p><strong>Android:</strong> Im Chrome auf <em>Menü</em> (⋮) tippen → <em>Zum Startbildschirm hinzufügen</em> wählen.</p>
-      <p><strong>Datenschutz:</strong> Dein Standort wird direkt an die BVG geschickt, um die nächsten Abfahrten abzurufen. Es gibt keinen Zwischenserver, keine Accounts, kein Tracking und keine Analyse. Deine Einstellungen bleiben lokal auf deinem Gerät.</p>
+      <p><strong>Datenschutz:</strong> Dein Standort wird direkt an Transitous geschickt, einen community-betriebenen Open-Data-Dienst, um die nächsten Abfahrten abzurufen. Es gibt keinen Zwischenserver, keine Accounts, kein Tracking und keine Analyse. Deine Einstellungen bleiben lokal auf deinem Gerät.</p>
+      <p><strong>Daten:</strong> <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous</a> (offene VBB-Fahrplandaten inkl. Echtzeit).</p>
       <button class="close-btn" onclick="this.closest('.overlay').remove()">Schließen</button>
     </div>`;
     document.body.appendChild(ov);
