@@ -1,7 +1,10 @@
 <!DOCTYPE html><html lang="de"><head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.transitous.org; img-src data:; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#f2f2f4" media="(prefers-color-scheme: light)">
   <title>BVG Express</title>
@@ -11,7 +14,8 @@
     :root{
       --bg:#f2f2f4; --card:#ffffff; --border:#d8d8dc;
       --text:#1a1a1e; --muted:#6b6b73;
-      --ok:#16a34a; --err:#e11d48; --accent:#0284c7;
+      --ok:#16a34a; --err:#e11d48; --accent:#0284c7; --warn:#b45309;
+      --bvg:#F0D722; --bvg-text:#1a1a1e;
       --ok-border:rgba(22,163,74,.3); --err-border:rgba(225,29,72,.3); --accent-border:rgba(2,132,199,.3);
       --card-overlay:rgba(0,0,0,0.03);
       --r:14px;
@@ -22,7 +26,7 @@
       :root{
         --bg:#0b0b0c; --card:#141417; --border:#26262b;
         --text:#f2f2f4; --muted:#a7a7ad;
-        --ok:#86efac; --err:#fb7185; --accent:#7dd3fc;
+        --ok:#86efac; --err:#fb7185; --accent:#7dd3fc; --warn:#fcd34d;
         --ok-border:rgba(134,239,172,.35); --err-border:rgba(251,113,133,.35); --accent-border:rgba(125,211,252,.35);
         --card-overlay:rgba(255,255,255,0.03);
       }
@@ -34,15 +38,18 @@
       -webkit-font-smoothing: antialiased;
     }
     header{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px;}
-    h1{margin:0; font-size:18px}
+    h1{margin:0; font-size:18px; display:flex; align-items:center; gap:8px}
+    h1::before{content:""; width:11px; height:11px; border-radius:3px; background:var(--bvg); flex:none}
     .sub{margin-top:4px; font-size:12px; color:var(--muted); line-height:1.25}
     .btns{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
     button{
       background:var(--card); border:1px solid var(--border); color:var(--text);
       padding:10px 12px; border-radius:12px; font-size:13px; line-height:1; min-width:44px;
+      cursor:pointer;
     }
     button:active{transform:translateY(1px)}
-    button.active{border-color:var(--accent); color:var(--accent)}
+    button:focus-visible{outline:2px solid var(--bvg); outline-offset:2px}
+    button.active{background:var(--bvg); border-color:var(--bvg); color:var(--bvg-text); font-weight:600}
     .info-btn{padding:10px; min-width:40px; font-size:15px; font-weight:700; line-height:1}
     .overlay{
       position:fixed; inset:0; z-index:100;
@@ -66,7 +73,7 @@
       flex:1 1 auto; min-width:60px; padding:12px 10px; border-radius:12px;
       font-size:15px; font-weight:600; text-align:center;
     }
-    .choice-grid button.selected{border-color:var(--accent); color:var(--accent)}
+    .choice-grid button.selected{background:var(--bvg); border-color:var(--bvg); color:var(--bvg-text)}
     .pill{
       display:flex; align-items:center; gap:8px;
       border:1px solid var(--border);
@@ -94,9 +101,12 @@
       border:1px solid var(--border);
       border-radius:var(--r);
       padding:12px;
-      display:grid;
-      gap:10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
     }
+    .dep-left{flex:1; min-width:0; display:grid; gap:6px}
     .stop-card{
       background:var(--card);
       border:1px solid var(--border);
@@ -111,36 +121,35 @@
       transition:border-color .15s;
       width:100%; text-align:left; font:inherit; color:inherit;
     }
-    .stop-card:active{border-color:var(--accent)}
+    .stop-card:active{border-color:var(--bvg)}
     .stop-name{font-size:15px; font-weight:600}
     .stop-dist{font-size:13px; color:var(--muted); white-space:nowrap}
     .stop-arrow{color:var(--muted); font-size:16px}
-    .toprow{display:flex; justify-content:space-between; gap:10px; align-items:flex-start}
-    .time{font-family:var(--mono); font-size:22px; line-height:1; letter-spacing:.2px}
-    .badges{display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end}
-    .badge{
-      font-size:12px; padding:5px 8px; border-radius:999px;
-      border:1px solid var(--border);
-      background:var(--card-overlay);
-      color:var(--muted);
-      white-space:nowrap;
+    .route{display:flex; gap:9px; align-items:center; min-width:0}
+    .chip{
+      font-size:13px; font-weight:700; line-height:1;
+      padding:5px 8px; border-radius:6px;
+      white-space:nowrap; flex:none;
+      min-width:30px; text-align:center;
     }
-    .badge.ok{color:var(--ok); border-color: var(--ok-border)}
-    .badge.err{color:var(--err); border-color: var(--err-border)}
-    .badge.accent{color:var(--accent); border-color: var(--accent-border)}
-    .route{display:flex; gap:10px; align-items:baseline}
-    .line{font-weight:700; font-size:16px}
     .dir{
-      color:var(--muted); font-size:13px; line-height:1.3;
+      color:var(--text); font-size:14px; font-weight:600; line-height:1.3;
       overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
     }
     .meta{
-      display:flex; justify-content:space-between; gap:10px;
-      border-top:1px solid var(--border);
-      padding-top:10px;
+      display:flex; flex-wrap:wrap; gap:3px 10px;
       color:var(--muted);
       font-size:12px;
+      font-variant-numeric:tabular-nums;
     }
+    .meta .ok{color:var(--ok)}
+    .meta .warn{color:var(--warn)}
+    .when{text-align:right; flex:none}
+    .rel{
+      font-size:20px; font-weight:700; line-height:1.1;
+      font-variant-numeric:tabular-nums; white-space:nowrap;
+    }
+    .rel.cancelled{font-size:14px; color:var(--err)}
     .mono{font-family:var(--mono)}
   </style>
 </head>
@@ -165,7 +174,6 @@
     <span id="pillText">Bereit</span>
   </div>
 
-  <div class="status" id="status">—</div>
   <div class="grid" id="list" aria-live="polite"></div>
 
 <script>
@@ -176,11 +184,13 @@
   const AUTO_REFRESH_MS = 30_000;
 
   const subtitle = document.getElementById("subtitle");
-  const statusEl = document.getElementById("status");
+  const statusEl = document.getElementById("pillText");
   const listEl = document.getElementById("list");
   const dotEl = document.getElementById("dot");
-  const pillTextEl = document.getElementById("pillText");
   const btnStop = document.getElementById("btnStop");
+
+  const RADIUS_OPTIONS = [100, 200, 500, 1000, 2000];
+  const COUNT_OPTIONS = [5, 10, 20];
 
   const defaults = {
     radius_m: 500,
@@ -195,16 +205,21 @@
   const state = { ...defaults, ...loadSettings() };
   let refreshTimer = null;
   let cachedStops = [];
+  let lastNearby = null; // {lat, lon, radius_m} des letzten /map/stops-Abrufs
   let filterStop = null;
   let viewMode = "departures"; // "departures" | "stops"
   let loadRequestId = 0;
 
+  // Nur bekannte Keys mit erlaubten Werten übernehmen — localStorage ist
+  // nicht vertrauenswürdig (alte Versionen, manuelle Änderungen)
   function loadSettings() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return typeof parsed === "object" && parsed !== null ? parsed : {};
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (typeof parsed !== "object" || parsed === null) return {};
+      const out = {};
+      if (RADIUS_OPTIONS.includes(parsed.radius_m)) out.radius_m = parsed.radius_m;
+      if (COUNT_OPTIONS.includes(parsed.max_results)) out.max_results = parsed.max_results;
+      return out;
     } catch { return {}; }
   }
 
@@ -244,7 +259,7 @@
 
   function setPill(kind, text){
     dotEl.className = "dot" + (kind ? (" " + kind) : "");
-    pillTextEl.textContent = text;
+    statusEl.textContent = text;
   }
 
   function fmtDistance(m){
@@ -320,6 +335,17 @@
     return out.slice(0, state.nearby_limit);
   }
 
+  // GTFS-Linienfarben aus der API; Fallback nach Verkehrsmittel, falls der Feed
+  // keine Farbe liefert (VBB liefert sie i.d.R.). MOTIS meldet S-Bahn als METRO.
+  const MODE_COLORS = {
+    SUBWAY: "#115D91", METRO: "#008351", TRAM: "#BE1414",
+    BUS: "#95276E", REGIONAL_RAIL: "#E3000F", RAIL: "#E3000F", FERRY: "#0080BF",
+  };
+
+  function gtfsColor(c){
+    return /^[0-9a-fA-F]{6}$/.test(String(c || "")) ? `#${c}` : null;
+  }
+
   // onlyThisStop: stoptimes expandiert auf die ganze Station (teils Nachbar-Stops im
   // selben Cluster) — im Haltestellenfilter-Modus auf die gewählte Station einschränken
   function parseDepartures(payload, stop, nowMillis, onlyThisStop){
@@ -335,18 +361,24 @@
       if (Number.isNaN(dt.getTime())) continue;
       if (dt.getTime() < nowMillis || dt.getTime() > horizon) continue;
 
+      // delay nur mit Echtzeitdaten — ohne realTime keine Aussage ("pünktlich" wäre gelogen)
       let delayMin = null;
       if (d.realTime && p.scheduledDeparture) {
         const sched = new Date(p.scheduledDeparture);
         if (!Number.isNaN(sched.getTime())) delayMin = Math.round((dt.getTime() - sched.getTime())/60000);
       }
-      const delayTxt = (delayMin == null || delayMin === 0) ? "pünktlich" : (delayMin > 0 ? `+${delayMin}` : `${delayMin}`);
+      const delayTxt = delayMin == null ? null
+        : delayMin === 0 ? "pünktlich"
+        : delayMin > 0 ? `+${delayMin} min` : `${delayMin} min`;
 
       rows.push({
         when_dt: dt,
         time: isoToLocalTime(dt.toISOString()),
         delay: delayTxt,
+        delay_min: delayMin,
         route: String(d.routeShortName || d.displayName || ""),
+        route_color: gtfsColor(d.routeColor) || MODE_COLORS[String(d.mode || "")] || "#6b6b73",
+        route_text_color: gtfsColor(d.routeTextColor) || "#ffffff",
         headsign: String(d.headsign || ""),
         platform: String(p.track || p.scheduledTrack || ""),
         stop_id: stop.id,
@@ -379,6 +411,18 @@
     while(listEl.firstChild) listEl.removeChild(listEl.firstChild);
   }
 
+  function relTimeText(depMillis){
+    const min = Math.floor((depMillis - Date.now()) / 60000);
+    return min <= 0 ? "jetzt" : `${min} min`;
+  }
+
+  // aktualisiert nur die relativen Zeit-Labels, kein Re-Fetch
+  function updateRelTimes(){
+    for(const el of document.querySelectorAll("[data-dep]")){
+      el.textContent = relTimeText(Number(el.dataset.dep));
+    }
+  }
+
   function renderDepartures(rows, showStop){
     clearList();
 
@@ -394,65 +438,70 @@
       const card = document.createElement("div");
       card.className = "card";
 
-      const top = document.createElement("div");
-      top.className = "toprow";
-
-      const time = document.createElement("div");
-      time.className = "time";
-      time.textContent = r.time;
-
-      const badges = document.createElement("div");
-      badges.className = "badges";
-
-      const delayBadge = document.createElement("span");
-      delayBadge.className = "badge " + (r.is_cancelled ? "err" : (r.delay === "pünktlich" ? "ok" : "accent"));
-      delayBadge.textContent = r.is_cancelled ? "Fällt aus" : r.delay;
-
-      badges.appendChild(delayBadge);
-
-      if(r.platform){
-        const platBadge = document.createElement("span");
-        platBadge.className = "badge";
-        platBadge.textContent = `Gl. ${r.platform}`;
-        badges.appendChild(platBadge);
-      }
-
-      if(showStop){
-        const distBadge = document.createElement("span");
-        distBadge.className = "badge";
-        distBadge.textContent = fmtDistance(r.distance_m);
-        badges.appendChild(distBadge);
-      }
-
-      top.appendChild(time);
-      top.appendChild(badges);
+      const left = document.createElement("div");
+      left.className = "dep-left";
 
       const routeRow = document.createElement("div");
       routeRow.className = "route";
 
-      const line = document.createElement("div");
-      line.className = "line";
-      line.textContent = r.route || "—";
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = r.route || "—";
+      chip.style.background = r.route_color;
+      chip.style.color = r.route_text_color;
 
       const dir = document.createElement("div");
       dir.className = "dir";
       dir.textContent = r.headsign || "—";
 
-      routeRow.appendChild(line);
+      routeRow.appendChild(chip);
       routeRow.appendChild(dir);
 
-      card.appendChild(top);
-      card.appendChild(routeRow);
+      const meta = document.createElement("div");
+      meta.className = "meta";
 
-      if(showStop){
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        const stopName = document.createElement("div");
-        stopName.textContent = r.stop_name;
-        meta.appendChild(stopName);
-        card.appendChild(meta);
+      const abs = document.createElement("span");
+      abs.className = "mono";
+      abs.textContent = r.time;
+      meta.appendChild(abs);
+
+      if(r.delay && !r.is_cancelled){
+        const delay = document.createElement("span");
+        delay.className = r.delay_min === 0 ? "ok" : "warn";
+        delay.textContent = r.delay;
+        meta.appendChild(delay);
       }
 
+      if(r.platform){
+        const plat = document.createElement("span");
+        plat.textContent = `Gl. ${r.platform}`;
+        meta.appendChild(plat);
+      }
+
+      if(showStop){
+        const stopName = document.createElement("span");
+        stopName.textContent = `${r.stop_name} · ${fmtDistance(r.distance_m)}`;
+        meta.appendChild(stopName);
+      }
+
+      left.appendChild(routeRow);
+      left.appendChild(meta);
+
+      const when = document.createElement("div");
+      when.className = "when";
+      const rel = document.createElement("div");
+      rel.className = "rel";
+      if(r.is_cancelled){
+        rel.classList.add("cancelled");
+        rel.textContent = "Fällt aus";
+      } else {
+        rel.dataset.dep = String(r.when_dt.getTime());
+        rel.textContent = relTimeText(r.when_dt.getTime());
+      }
+      when.appendChild(rel);
+
+      card.appendChild(left);
+      card.appendChild(when);
       listEl.appendChild(card);
     }
   }
@@ -472,7 +521,7 @@
     // "Alle" option to clear filter
     const allCard = document.createElement("button");
     allCard.className = "stop-card";
-    if (!filterStop) allCard.style.borderColor = "var(--accent)";
+    if (!filterStop) allCard.style.borderColor = "var(--bvg)";
     allCard.addEventListener("click", () => {
       filterStop = null;
       updateStopButton();
@@ -482,7 +531,6 @@
     const allName = document.createElement("div");
     allName.className = "stop-name";
     allName.textContent = "Alle Haltestellen";
-    allName.style.color = filterStop ? "var(--text)" : "var(--accent)";
     const allDist = document.createElement("div");
     allDist.className = "stop-dist";
     allDist.textContent = `${stops.length} Haltestellen`;
@@ -494,7 +542,7 @@
     for(const s of stops){
       const card = document.createElement("button");
       card.className = "stop-card";
-      if (filterStop && filterStop.key === s.key) card.style.borderColor = "var(--accent)";
+      if (filterStop && filterStop.key === s.key) card.style.borderColor = "var(--bvg)";
       card.addEventListener("click", () => {
         filterStop = s;
         updateStopButton();
@@ -505,7 +553,6 @@
       const name = document.createElement("div");
       name.className = "stop-name";
       name.textContent = s.name;
-      if (filterStop && filterStop.key === s.key) name.style.color = "var(--accent)";
       const dist = document.createElement("div");
       dist.className = "stop-dist";
       dist.textContent = fmtDistance(s.distance);
@@ -544,54 +591,60 @@
     clearList();
 
     try{
-      setPill("", "Lade…");
-      statusEl.textContent = "Standort wird abgerufen…";
-      subtitle.textContent = "GPS + Transitous";
+      setPill("", "Standort wird abgerufen…");
 
       const loc = await getLocation();
       if (thisRequest !== loadRequestId) return;
-      subtitle.textContent = `📍 ${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)} (±${Math.round(loc.acc)} m)`;
+      subtitle.textContent = `Standort ±${Math.round(loc.acc)} m · Transitous`;
 
-      // fetch nearby stops (needed for unfiltered view + to update cache);
-      // Radius als Bounding-Box, exakter Radius wird in parseNearbyStops gefiltert
-      const dLat = state.radius_m / 111320;
-      const dLon = state.radius_m / (111320 * Math.cos(loc.lat * Math.PI / 180));
-      const nearbyParams = {
-        min: `${(loc.lat - dLat).toFixed(6)},${(loc.lon - dLon).toFixed(6)}`,
-        max: `${(loc.lat + dLat).toFixed(6)},${(loc.lon + dLon).toFixed(6)}`,
-      };
-      let nearbyPayload;
-      for (let attempt = 0; ; attempt++) {
-        try {
-          nearbyPayload = await fetchJSON(`${API_BASE}/map/stops`, nearbyParams);
-          break;
-        } catch(e) {
-          if (attempt >= 2) throw e;
-          if (thisRequest !== loadRequestId) return;
-          statusEl.textContent = `Erneuter Versuch (${attempt + 1}/2)…`;
+      // Nearby-Stops nur neu abfragen, wenn kein Cache, Radius geändert oder
+      // Standort deutlich bewegt — der Auto-Refresh lädt sonst nur stoptimes
+      const moved = lastNearby
+        ? distanceM(loc.lat, loc.lon, lastNearby.lat, lastNearby.lon)
+        : Infinity;
+      if (!cachedStops.length || !lastNearby
+          || lastNearby.radius_m !== state.radius_m
+          || moved > state.radius_m / 3) {
+        // Radius als Bounding-Box, exakter Radius wird in parseNearbyStops gefiltert
+        const dLat = state.radius_m / 111320;
+        const dLon = state.radius_m / (111320 * Math.cos(loc.lat * Math.PI / 180));
+        const nearbyParams = {
+          min: `${(loc.lat - dLat).toFixed(6)},${(loc.lon - dLon).toFixed(6)}`,
+          max: `${(loc.lat + dLat).toFixed(6)},${(loc.lon + dLon).toFixed(6)}`,
+        };
+        let nearbyPayload;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            nearbyPayload = await fetchJSON(`${API_BASE}/map/stops`, nearbyParams);
+            break;
+          } catch(e) {
+            if (attempt >= 2) throw e;
+            if (thisRequest !== loadRequestId) return;
+            setPill("", `Erneuter Versuch (${attempt + 1}/2)…`);
+          }
         }
-      }
 
-      if (thisRequest !== loadRequestId) return;
-      const nearby = parseNearbyStops(nearbyPayload, loc);
-      cachedStops = nearby;
+        if (thisRequest !== loadRequestId) return;
+        cachedStops = parseNearbyStops(nearbyPayload, loc);
+        lastNearby = { lat: loc.lat, lon: loc.lon, radius_m: state.radius_m };
+      }
+      const nearby = cachedStops;
 
       const stopsToQuery = filterStop
         ? nearby.filter(s => s.key === filterStop.key)
         : nearby;
 
       if(!stopsToQuery.length){
-        setPill("err", filterStop ? "Stop nicht gefunden" : "Keine Stops");
-        statusEl.textContent = filterStop
+        setPill("err", filterStop
           ? `${filterStop.name} nicht im Umkreis (${state.radius_m} m).`
-          : "Keine Haltestellen im Umkreis gefunden.";
+          : "Keine Haltestellen im Umkreis gefunden.");
         renderDepartures([], !filterStop);
         scheduleRefresh();
         return;
       }
 
       const label = filterStop ? filterStop.name : `${stopsToQuery.length} Haltestellen`;
-      statusEl.textContent = `Lade Abfahrten (${label})…`;
+      setPill("", `Lade Abfahrten (${label})…`);
 
       const when = nowISO();
       const nowMillis = Date.now();
@@ -604,10 +657,11 @@
               stopId: stop.id,
               time: when,
               // im Filter-Modus mehr holen: die Antwort enthält auch Nachbar-Stops
-              // des Clusters, die anschließend rausgefiltert werden
+              // des Clusters, die anschließend rausgefiltert werden; ungefiltert
+              // muss n auch bei nur einer Station max_results hergeben
               n: filterStop
                 ? Math.max(state.max_results, state.dep_results_per_stop) * 3
-                : state.dep_results_per_stop,
+                : Math.max(state.max_results, state.dep_results_per_stop),
             });
             return parseDepartures(dep, stop, nowMillis, Boolean(filterStop));
           } catch {
@@ -620,8 +674,7 @@
       if (thisRequest !== loadRequestId) return;
 
       if (depErrors === stopsToQuery.length) {
-        setPill("err", "Fehler");
-        statusEl.textContent = "Abfahrten konnten nicht geladen werden.";
+        setPill("err", "Abfahrten konnten nicht geladen werden.");
         clearList();
         scheduleRefresh();
         return;
@@ -631,22 +684,22 @@
       const rows = dedupSort(combined, state.max_results);
 
       if(!rows.length){
-        setPill("err", "Keine Abfahrten");
-        statusEl.textContent = "Keine Echtzeit-Abfahrten gefunden.";
+        setPill("err", "Keine Abfahrten gefunden.");
         renderDepartures([], !filterStop);
         scheduleRefresh();
         return;
       }
 
-      setPill("ok", "Aktuell");
       const filterLabel = filterStop ? ` · ${filterStop.name}` : "";
-      statusEl.textContent = `${rows.length} Abfahrten${filterLabel} · ${fmtTime()}`;
+      const errLabel = depErrors
+        ? ` · ${depErrors} Station${depErrors > 1 ? "en" : ""} ohne Antwort`
+        : "";
+      setPill("ok", `${rows.length} Abfahrten${filterLabel} · ${fmtTime()}${errLabel}`);
       renderDepartures(rows, !filterStop);
 
     } catch(e){
       if (thisRequest !== loadRequestId) return;
-      setPill("err", "Fehler");
-      statusEl.textContent = `Fehler: ${e?.message || e}`;
+      setPill("err", `Fehler: ${e?.message || e}`);
       clearList();
     } finally {
       if (thisRequest === loadRequestId) scheduleRefresh();
@@ -666,15 +719,24 @@
     }
     clearTimeout(refreshTimer);
     ++loadRequestId; // invalidate any in-flight loadDepartures()
-    setPill("ok", "Aktuell");
-    statusEl.textContent = "Haltestelle auswählen:";
+    setPill("", "Haltestelle auswählen");
     renderStops(cachedStops);
   }
 
-  function showChoiceOverlay(title, options, currentValue, unit, onSelect){
+  // Overlay mit Klick-außerhalb- und Escape-Schließen; Listener wird mit aufgeräumt
+  function makeOverlay(){
     const ov = document.createElement("div");
     ov.className = "overlay";
-    ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
+    const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
+    const onKey = (e) => { if(e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    ov.addEventListener("click", (e) => { if(e.target === ov) close(); });
+    ov.closeOverlay = close;
+    return ov;
+  }
+
+  function showChoiceOverlay(title, options, currentValue, unit, onSelect){
+    const ov = makeOverlay();
     const box = document.createElement("div");
     box.className = "overlay-box";
     const h = document.createElement("h2");
@@ -686,21 +748,21 @@
       const btn = document.createElement("button");
       btn.textContent = unit ? `${val} ${unit}` : String(val);
       if(val === currentValue) btn.classList.add("selected");
-      btn.addEventListener("click", () => { ov.remove(); onSelect(val); });
+      btn.addEventListener("click", () => { ov.closeOverlay(); onSelect(val); });
       grid.appendChild(btn);
     }
     box.appendChild(grid);
     const close = document.createElement("button");
     close.className = "close-btn";
     close.textContent = "Abbrechen";
-    close.addEventListener("click", () => ov.remove());
+    close.addEventListener("click", ov.closeOverlay);
     box.appendChild(close);
     ov.appendChild(box);
     document.body.appendChild(ov);
   }
 
   function changeRadius(){
-    showChoiceOverlay("Radius", [100, 200, 500, 1000, 2000], state.radius_m, "m", (v) => {
+    showChoiceOverlay("Radius", RADIUS_OPTIONS, state.radius_m, "m", (v) => {
       state.radius_m = v;
       saveSettings();
       updateSettingsButtons();
@@ -709,7 +771,7 @@
   }
 
   function changeCount(){
-    showChoiceOverlay("Abfahrten", [5, 10, 20], state.max_results, "", (v) => {
+    showChoiceOverlay("Abfahrten", COUNT_OPTIONS, state.max_results, "", (v) => {
       state.max_results = v;
       saveSettings();
       updateSettingsButtons();
@@ -718,9 +780,7 @@
   }
 
   document.getElementById("btnInfo").addEventListener("click", () => {
-    const ov = document.createElement("div");
-    ov.className = "overlay";
-    ov.addEventListener("click", (e) => { if(e.target === ov) ov.remove(); });
+    const ov = makeOverlay();
     ov.innerHTML = `<div class="overlay-box">
       <h2>BVG Express</h2>
       <p>Ziel dieser Anwendung ist, auf dem schnellsten Weg die relevanten Abfahrten zu finden.</p>
@@ -729,8 +789,9 @@
       <p><strong>Android:</strong> Im Chrome auf <em>Menü</em> (⋮) tippen → <em>Zum Startbildschirm hinzufügen</em> wählen.</p>
       <p><strong>Datenschutz:</strong> Dein Standort wird direkt an Transitous geschickt, einen community-betriebenen Open-Data-Dienst, um die nächsten Abfahrten abzurufen. Es gibt keinen Zwischenserver, keine Accounts, kein Tracking und keine Analyse. Deine Einstellungen bleiben lokal auf deinem Gerät.</p>
       <p><strong>Daten:</strong> <a href="https://transitous.org/sources/" target="_blank" rel="noopener">Transitous</a> (offene VBB-Fahrplandaten inkl. Echtzeit).</p>
-      <button class="close-btn" onclick="this.closest('.overlay').remove()">Schließen</button>
+      <button class="close-btn">Schließen</button>
     </div>`;
+    ov.querySelector(".close-btn").addEventListener("click", ov.closeOverlay);
     document.body.appendChild(ov);
   });
 
@@ -738,6 +799,18 @@
   btnStop.addEventListener("click", showStopPicker);
   document.getElementById("btnRadius").addEventListener("click", changeRadius);
   document.getElementById("btnCount").addEventListener("click", changeCount);
+
+  // Aus dem Hintergrund geholt → sofort aktualisieren statt bis zu 30 s
+  // alte Zeiten zu zeigen; im Hintergrund keine Requests
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      if (viewMode === "departures") loadDepartures();
+    } else {
+      clearTimeout(refreshTimer);
+    }
+  });
+
+  setInterval(updateRelTimes, 10_000);
 
   updateStopButton();
   updateSettingsButtons();
